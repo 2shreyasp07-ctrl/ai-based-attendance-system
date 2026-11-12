@@ -1,0 +1,6 @@
+{
+  "name": "Smart AI Attendance System",
+  "description": "Browser-based face recognition student attendance system powered by face-api.js and local storage.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

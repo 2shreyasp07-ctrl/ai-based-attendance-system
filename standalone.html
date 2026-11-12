@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart AI Attendance System (Standalone Single-File)</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- face-api.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      nav, .no-print, button { display: none !important; }
+      body { background: white !important; color: black !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen antialiased">
+  <!-- Container for the entire standalone app -->
+  <div id="app" class="max-w-7xl mx-auto px-4 py-4 space-y-6">
+    <!-- Header -->
+    <header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-bold">AI</div>
+        <div>
+          <h1 class="text-xl font-bold">Smart AI Attendance System</h1>
+          <p class="text-xs text-slate-500">Standalone Browser Face Recognition</p>
+        </div>
+      </div>
+      <div id="liveClock" class="font-mono text-xs px-3 py-1.5 bg-white dark:bg-slate-900 border rounded-lg"></div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+      <button onclick="switchTab('dashboard')" id="tabBtn-dashboard" class="px-4 py-2 text-sm font-semibold rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">Dashboard</button>
+      <button onclick="switchTab('attendance')" id="tabBtn-attendance" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300">Take Attendance</button>
+      <button onclick="switchTab('register')" id="tabBtn-register" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300">Register Student</button>
+      <button onclick="switchTab('records')" id="tabBtn-records" class="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300">Records & Reports</button>
+    </div>
+
+    <!-- AI Models Status Banner -->
+    <div id="modelStatus" class="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-xs text-teal-900 dark:text-teal-200 flex items-center justify-between">
+      <span>Loading AI detection models from CDN...</span>
+    </div>
+
+    <!-- Tab 1: Dashboard -->
+    <div id="view-dashboard" class="space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div class="p-4 rounded-xl bg-white dark:bg-slate-900 border">
+          <p class="text-xs text-slate-500">Total Enrolled</p>
+          <p id="kpiTotal" class="text-2xl font-bold font-mono">0</p>
+        </div>
+        <div class="p-4 rounded-xl bg-white dark:bg-slate-900 border">
+          <p class="text-xs text-slate-500">Present Today</p>
+          <p id="kpiPresent" class="text-2xl font-bold font-mono text-emerald-600">0</p>
+        </div>
+        <div class="p-4 rounded-xl bg-white dark:bg-slate-900 border">
+          <p class="text-xs text-slate-500">Absent Today</p>
+          <p id="kpiAbsent" class="text-2xl font-bold font-mono text-rose-600">0</p>
+        </div>
+        <div class="p-4 rounded-xl bg-white dark:bg-slate-900 border">
+          <p class="text-xs text-slate-500">Attendance Rate</p>
+          <p id="kpiRate" class="text-2xl font-bold font-mono text-teal-600">0%</p>
+        </div>
+      </div>
+      <div class="p-4 rounded-xl bg-white dark:bg-slate-900 border">
+        <h3 class="font-bold text-sm mb-3">Absent Students Today</h3>
+        <div id="absentList" class="divide-y text-xs"></div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Attendance Scanner -->
+    <div id="view-attendance" class="hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Live Camera Feed</h2>
+        <div class="flex gap-2">
+          <button id="camToggleBtn" onclick="toggleWebcam()" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold">Start Camera</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-8 bg-slate-950 rounded-2xl relative overflow-hidden aspect-[4/3] flex items-center justify-center">
+          <video id="webcamVideo" autoplay muted playsinline class="w-full h-full object-cover transform -scale-x-100 hidden"></video>
+          <canvas id="overlayCanvas" class="absolute inset-0 w-full h-full pointer-events-none transform -scale-x-100"></canvas>
+          <div id="camStandby" class="text-center text-slate-400 p-6 text-xs">Camera is offline. Click "Start Camera" above.</div>
+        </div>
+        <div class="lg:col-span-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border space-y-3">
+          <h3 class="font-bold text-sm">Recently Marked Today</h3>
+          <div id="recentAttendanceList" class="divide-y text-xs max-h-96 overflow-y-auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Register -->
+    <div id="view-register" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <form onsubmit="handleRegisterSubmit(event)" class="lg:col-span-5 p-6 rounded-2xl bg-white dark:bg-slate-900 border space-y-4">
+          <h2 class="font-bold text-base">New Student Enrollment</h2>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Full Name *</label>
+            <input id="regName" required class="w-full px-3 py-2 border rounded-lg text-sm bg-transparent" placeholder="e.g. John Doe">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Roll Number (Unique) *</label>
+            <input id="regRoll" required class="w-full px-3 py-2 border rounded-lg text-sm font-mono bg-transparent" placeholder="e.g. CS-101">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Class / Division</label>
+            <input id="regClass" class="w-full px-3 py-2 border rounded-lg text-sm bg-transparent" placeholder="e.g. Class 10-A">
+          </div>
+          <div>
+            <p class="text-xs font-semibold mb-1">Samples Captured: <span id="sampleCount" class="font-mono text-teal-600">0/3 minimum</span></p>
+            <div id="samplesRow" class="flex gap-2 overflow-x-auto py-2"></div>
+          </div>
+          <button type="submit" id="saveStudentBtn" disabled class="w-full py-2.5 bg-teal-600 text-white font-bold rounded-lg text-xs disabled:opacity-40">Save Student</button>
+        </form>
+        <div class="lg:col-span-7 space-y-3">
+          <div class="bg-slate-950 rounded-2xl relative overflow-hidden aspect-[4/3] flex items-center justify-center">
+            <video id="regVideo" autoplay muted playsinline class="w-full h-full object-cover transform -scale-x-100 hidden"></video>
+            <div id="regCamStandby" class="text-slate-400 text-xs">Webcam required to capture samples.</div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="startRegCamera()" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-xs font-semibold">Open Enrollment Camera</button>
+            <button onclick="captureEnrollmentSample()" class="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold">Snap Sample</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Records -->
+    <div id="view-records" class="hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold">Attendance Records</h2>
+        <div class="flex gap-2">
+          <button onclick="exportCSV()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold">Export CSV</button>
+          <button onclick="window.print()" class="px-3 py-1.5 border rounded-lg text-xs font-semibold">Print Sheet</button>
+          <button onclick="clearRecords()" class="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold">Clear All</button>
+        </div>
+      </div>
+      <div class="rounded-xl border bg-white dark:bg-slate-900 overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b">
+            <tr>
+              <th class="p-3">Name</th>
+              <th class="p-3">Roll No</th>
+              <th class="p-3">Class</th>
+              <th class="p-3">Date</th>
+              <th class="p-3">Time</th>
+              <th class="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="recordsTableBody" class="divide-y"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Audio synthesizer
+    function playChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      } catch (e) {}
+    }
+
+    // Storage helpers
+    function getStudents() { return JSON.parse(localStorage.getItem('smart_attendance_students') || '[]'); }
+    function saveStudents(s) { localStorage.setItem('smart_attendance_students', JSON.stringify(s)); }
+    function getRecords() { return JSON.parse(localStorage.getItem('smart_attendance_records') || '[]'); }
+    function saveRecords(r) { localStorage.setItem('smart_attendance_records', JSON.stringify(r)); }
+
+    function getNow() {
+      const d = new Date();
+      const date = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+      let h = d.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      const time = `${String(h).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')} ${ampm}`;
+      return { date, time };
+    }
+
+    // Tab switching
+    function switchTab(tab) {
+      ['dashboard', 'attendance', 'register', 'records'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (t === tab) {
+          btn.className = 'px-4 py-2 text-sm font-semibold rounded-lg bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300';
+        } else {
+          btn.className = 'px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300';
+        }
+      });
+      renderDashboard();
+      renderRecords();
+    }
+
+    // Model loader
+    let modelsLoaded = false;
+    async function loadModels() {
+      const statusEl = document.getElementById('modelStatus');
+      try {
+        const URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(URL);
+        modelsLoaded = true;
+        statusEl.innerHTML = '<span class="text-teal-600 font-bold">✓ AI Face Recognition Models Loaded & Ready</span>';
+      } catch (e) {
+        statusEl.innerHTML = '<span class="text-rose-600">Failed to load models from CDN. Check network.</span>';
+      }
+    }
+
+    // Live Clock
+    setInterval(() => {
+      const { date, time } = getNow();
+      document.getElementById('liveClock').innerText = `${time} · ${date}`;
+    }, 1000);
+
+    // Dashboard rendering
+    function renderDashboard() {
+      const students = getStudents();
+      const records = getRecords();
+      const { date } = getNow();
+      const todayRecords = records.filter(r => r.date === date);
+      const presentIds = new Set(todayRecords.map(r => r.studentId));
+
+      document.getElementById('kpiTotal').innerText = students.length;
+      document.getElementById('kpiPresent').innerText = presentIds.size;
+      document.getElementById('kpiAbsent').innerText = Math.max(0, students.length - presentIds.size);
+      const rate = students.length > 0 ? Math.round((presentIds.size / students.length) * 100) : 0;
+      document.getElementById('kpiRate').innerText = `${rate}%`;
+
+      const absentList = document.getElementById('absentList');
+      const absentStudents = students.filter(s => !presentIds.has(s.id));
+      absentList.innerHTML = absentStudents.length === 0
+        ? '<p class="py-3 text-slate-400">All students present today!</p>'
+        : absentStudents.map(s => `<div class="py-2 flex justify-between"><span>${s.name} (${s.rollNumber})</span><span class="text-rose-500 font-semibold">Absent</span></div>`).join('');
+    }
+
+    // Records rendering
+    function renderRecords() {
+      const records = getRecords();
+      const body = document.getElementById('recordsTableBody');
+      body.innerHTML = records.length === 0
+        ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">No records found</td></tr>'
+        : records.map(r => `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+            <td class="p-3 font-semibold">${r.studentName}</td>
+            <td class="p-3 font-mono">${r.rollNumber}</td>
+            <td class="p-3">${r.classDivision || 'General'}</td>
+            <td class="p-3 font-mono">${r.date}</td>
+            <td class="p-3 font-mono">${r.time}</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold">Present</span></td>
+          </tr>
+        `).join('');
+    }
+
+    // CSV Export
+    function exportCSV() {
+      const records = getRecords();
+      if (!records.length) return alert('No records to export');
+      const csv = ['Roll,Name,Class,Date,Time,Status', ...records.map(r => `"${r.rollNumber}","${r.studentName}","${r.classDivision||''}","${r.date}","${r.time}","${r.status}"`)].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Attendance_${getNow().date.replace(/\//g,'-')}.csv`;
+      a.click();
+    }
+
+    function clearRecords() {
+      if (confirm('Clear all attendance logs?')) {
+        saveRecords([]);
+        renderDashboard();
+        renderRecords();
+      }
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      loadModels();
+      renderDashboard();
+      renderRecords();
+    });
+  </script>
+</body>
+</html>
